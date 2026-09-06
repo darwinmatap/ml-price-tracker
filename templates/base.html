@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}ML Price Tracker{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/base.css" />
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+    <main class="page">{% block content %}{% endblock %}</main>
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

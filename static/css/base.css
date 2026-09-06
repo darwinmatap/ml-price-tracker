@@ -1,0 +1,260 @@
+/*
+  ML Price Tracker — sistema de diseño base.
+
+  Paleta: "teal profundo" como color de marca — transmite estabilidad y
+  claridad de datos sin caer en el azul genérico de frameworks (Bootstrap/
+  Material). El verde y el rojo quedan reservados exclusivamente para
+  señales de precio (baja/alza) y estados de éxito/error, nunca para UI
+  decorativa, así el usuario aprende rápido qué significa cada color.
+
+  Tipografía: system-ui stack (sin fuentes externas). Es la elección
+  "profesional moderna" de productos como GitHub o Linear: nativa en cada
+  SO, cero requests adicionales, cero flash de fuente sin cargar.
+
+  Mobile-first: los estilos base asumen ~375px de ancho. Las media
+  queries (min-width) solo AGREGAN comportamiento para pantallas más
+  grandes, nunca lo quitan.
+*/
+
+:root {
+  /* --- Color: marca --- */
+  --color-primary: #0b6e6e;
+  --color-primary-dark: #084f4f;
+  --color-primary-light: #e3f2f1;
+
+  /* --- Color: señales de estado (reservados, no decorativos) --- */
+  --color-success: #1f9d55;
+  --color-success-bg: #e9f7ee;
+  --color-danger: #d64545;
+  --color-danger-bg: #fbeaea;
+  --color-warning: #d98c2b;
+  --color-warning-bg: #fdf3e4;
+
+  /* --- Color: neutrales --- */
+  --color-bg: #f7f9f9;
+  --color-surface: #ffffff;
+  --color-text: #16221f;
+  --color-text-muted: #5b6b68;
+  --color-border: #dde4e3;
+
+  /* --- Tipografía --- */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.5rem;
+  --line-height-base: 1.5;
+
+  /* --- Espaciado (escala de 4px) --- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-8: 3rem;
+
+  /* --- Forma --- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 22, 0.06);
+  --shadow-md: 0 8px 24px rgba(15, 23, 22, 0.1);
+
+  /* Área táctil mínima recomendada (WCAG 2.5.5 / Apple HIG) */
+  --touch-target: 44px;
+}
+
+/* --- Reset mínimo --- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-base);
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* --- Layout: página centrada tipo "card", mobile-first --- */
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+
+.card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6) var(--space-5);
+}
+
+.card__title {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-2);
+}
+
+.card__subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-6);
+}
+
+/* --- Formularios --- */
+
+.field {
+  margin-bottom: var(--space-4);
+}
+
+.field label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.field input {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--font-size-base);
+  font-family: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.field .hint {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* --- Botones (mínimo 44x44px de área táctil) --- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: var(--space-3) var(--space-5);
+  font-family: inherit;
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    transform 0.05s ease;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+.btn-primary:active {
+  transform: scale(0.99);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Mensajes de estado --- */
+
+.message {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-4);
+}
+
+.message--error {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid rgba(214, 69, 69, 0.25);
+}
+
+.message--success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid rgba(31, 157, 85, 0.25);
+}
+
+/* --- Enlaces auxiliares bajo el formulario --- */
+
+.form-link {
+  text-align: center;
+  margin-top: var(--space-5);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.form-link a {
+  color: var(--color-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.form-link a:hover {
+  text-decoration: underline;
+}
+
+/* --- Tablet y desktop: la card gana aire, no cambia de estructura --- */
+
+@media (min-width: 640px) {
+  .card {
+    padding: var(--space-8) var(--space-6);
+  }
+}

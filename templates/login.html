@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Iniciar sesión · ML Price Tracker{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h1 class="card__title">ML Price Tracker</h1>
+  <p class="card__subtitle">Inicia sesión para monitorear tus precios</p>
+
+  <div id="login-error" class="message message--error" role="alert" hidden></div>
+  <div id="login-success" class="message message--success" role="status" hidden></div>
+
+  <form id="login-form" novalidate>
+    <div class="field">
+      <label for="username">Usuario</label>
+      <input type="text" id="username" name="username" autocomplete="username" required />
+    </div>
+    <div class="field">
+      <label for="password">Contraseña</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required />
+    </div>
+    <button type="submit" class="btn btn-primary">Iniciar sesión</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/login.js"></script>
+{% endblock %}

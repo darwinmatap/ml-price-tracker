@@ -1,7 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -10,6 +12,9 @@ from app.admin import router as admin_router
 from app.auth import limiter, router as auth_router
 from app.products import router as products_router
 from app.scheduler import create_scheduler
+from app.views import router as views_router
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,9 @@ app.add_middleware(SlowAPIMiddleware)
 app.include_router(auth_router)
 app.include_router(products_router)
 app.include_router(admin_router)
+app.include_router(views_router)
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 @app.get("/health")
