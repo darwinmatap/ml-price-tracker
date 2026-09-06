@@ -4,5 +4,12 @@ sqlalchemy==2.0.52
 alembic==1.19.2
 psycopg2-binary==2.9.12
 passlib[bcrypt]==1.7.4
+# bcrypt fijado explícitamente por debajo de 4.1: passlib 1.7.4 no es
+# compatible con el cambio de comportamiento introducido en bcrypt>=4.1
+# (su detección interna de backend rompe con ValueError). Ver:
+# https://github.com/pyca/bcrypt/issues/684
+bcrypt==4.0.1
 python-dotenv==1.2.3
 requests==2.34.2
+pyjwt==2.13.0
+slowapi==0.1.10
