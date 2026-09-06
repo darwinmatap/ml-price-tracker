@@ -32,7 +32,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from app.models import Product, PriceCheck  # noqa: E402, F401
+from app.models import Product, PriceCheck, User  # noqa: E402, F401
 from app.database import Base  # noqa: E402
 
 target_metadata = Base.metadata
@@ -82,7 +82,14 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            # SQLite no soporta ALTER TABLE para agregar/quitar constraints
+            # (FKs, UNIQUE) fuera de "batch mode" (recrea la tabla). Esto
+            # nunca se usa contra el target real (Postgres); solo importa
+            # para poder aplicar migraciones de verdad contra una SQLite
+            # descartable al generar/probar migraciones localmente.
+            render_as_batch=connection.dialect.name == "sqlite",
         )
 
         with context.begin_transaction():

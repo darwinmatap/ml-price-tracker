@@ -6,6 +6,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+from app.admin import router as admin_router
 from app.auth import limiter, router as auth_router
 from app.products import router as products_router
 from app.scheduler import create_scheduler
@@ -34,6 +35,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 app.include_router(auth_router)
 app.include_router(products_router)
+app.include_router(admin_router)
 
 
 @app.get("/health")

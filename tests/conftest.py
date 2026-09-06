@@ -2,19 +2,19 @@ import os
 
 from passlib.context import CryptContext
 
-# Los módulos de la app exigen estas variables al importarse (fail-fast en
-# producción, ver app/database.py y app/auth.py). Se definen valores de
-# prueba aquí, ANTES de importar cualquier módulo de la app, para que la
-# sola importación no rompa los tests. Nunca se usan credenciales reales.
+# app.database exige DATABASE_URL y app.auth exige SECRET_KEY al
+# importarse (fail-fast en producción). Se define un valor de prueba
+# aquí, ANTES de importar cualquier módulo de la app, para que la sola
+# importación no rompa los tests. Nunca se usan credenciales reales.
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
-
-TEST_USERNAME = "admin"
-TEST_PASSWORD = "S3cur3-Test-Password!"
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-os.environ.setdefault("APP_USERNAME", TEST_USERNAME)
-os.environ.setdefault("APP_PASSWORD_HASH", _pwd_context.hash(TEST_PASSWORD))
 os.environ.setdefault("SECRET_KEY", "test-secret-key-solo-para-tests-no-usar-en-produccion")
+
+TEST_USERNAME = "usuario_test"
+TEST_PASSWORD = "S3cur3-Test-Password!"
+TEST_ADMIN_USERNAME = "admin_test"
+TEST_ADMIN_PASSWORD = "Adm1n-Test-Password!"
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 from unittest.mock import MagicMock  # noqa: E402
 
@@ -28,6 +28,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 from app.auth import limiter, reset_login_security_state_for_tests  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.models import User, UserRole  # noqa: E402
 
 
 @pytest.fixture()
@@ -90,11 +91,61 @@ def client(db_session):
         app.dependency_overrides.pop(get_db, None)
 
 
+def create_user(
+    db_session,
+    username=TEST_USERNAME,
+    password=TEST_PASSWORD,
+    role=UserRole.USER,
+    is_active=True,
+    debe_cambiar_password=False,
+):
+    """Crea y comitea un User de prueba directamente vía el ORM."""
+    user = User(
+        username=username,
+        password_hash=_pwd_context.hash(password),
+        role=role,
+        is_active=is_active,
+        debe_cambiar_password=debe_cambiar_password,
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
 @pytest.fixture()
-def auth_headers(client):
+def test_user(db_session):
+    """Usuario normal (role=user) ya persistido, listo para loguearse."""
+    return create_user(db_session, username=TEST_USERNAME, password=TEST_PASSWORD, role=UserRole.USER)
+
+
+@pytest.fixture()
+def test_admin(db_session):
+    """Usuario admin ya persistido, listo para loguearse."""
+    return create_user(
+        db_session,
+        username=TEST_ADMIN_USERNAME,
+        password=TEST_ADMIN_PASSWORD,
+        role=UserRole.ADMIN,
+    )
+
+
+@pytest.fixture()
+def auth_headers(client, test_user):
     response = client.post(
         "/auth/login",
         json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def admin_auth_headers(client, test_admin):
+    response = client.post(
+        "/auth/login",
+        json={"username": TEST_ADMIN_USERNAME, "password": TEST_ADMIN_PASSWORD},
     )
     assert response.status_code == 200
     token = response.json()["access_token"]

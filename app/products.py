@@ -6,6 +6,13 @@ dependencies=[Depends(get_current_user)] en la definición del router más
 abajo) — se reutiliza la dependencia ya existente en app/auth.py, no se
 reimplementa validación de tokens aquí.
 
+Aislamiento multi-tenant: cada producto pertenece a un user_id. Todo
+endpoint que lea, escanee o borre un producto por id filtra explícitamente
+por Product.user_id == current_user.id — nunca se confía solo en el id
+de la URL. Si el id pertenece a otro usuario, la respuesta es 404 (no
+403): admitir "existe pero no es tuyo" ya sería filtrar información sobre
+datos de otro usuario.
+
 Política de errores: ningún endpoint debe filtrar detalles internos
 (tracebacks, mensajes crudos de SQLAlchemy) al cliente. Los errores
 esperables (dominio no permitido, item_id duplicado, producto no
@@ -28,7 +35,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.ml_client import fetch_and_store_price
-from app.models import PriceCheck, Product
+from app.models import PriceCheck, Product, User
 from app.scheduler import run_scan_all
 from app.utils import extract_product_id
 
@@ -75,6 +82,8 @@ class ProductCreateRequest(BaseModel):
     # Una URL de Mercado Libre nunca debería ser tan corta como para ser
     # inválida de entrada (min_length) ni exceder un largo razonable
     # (max_length) — cortamos entradas absurdas antes de tocar regex/red.
+    # No incluye user_id: el dueño del producto es SIEMPRE el usuario
+    # autenticado, nunca algo que el cliente pueda elegir en el body.
     url: str = Field(min_length=10, max_length=500)
 
 
@@ -121,7 +130,11 @@ class ScanAllResult(BaseModel):
 
 
 @router.post("", response_model=ProductCreateResponse, status_code=201)
-def create_product(payload: ProductCreateRequest, db: Session = Depends(get_db)):
+def create_product(
+    payload: ProductCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     if not _is_allowed_domain(payload.url):
         raise HTTPException(
             status_code=422,
@@ -139,20 +152,41 @@ def create_product(payload: ProductCreateRequest, db: Session = Depends(get_db))
             detail="No se pudo determinar el ID del producto a partir de la URL.",
         )
 
-    existing_product = db.execute(select(Product).where(Product.item_id == item_id)).scalar_one_or_none()
+    # El UNIQUE es compuesto (user_id, item_id): dos usuarios distintos
+    # pueden monitorear el mismo producto de Mercado Libre de forma
+    # independiente, cada uno con su propia fila. Lo único que no puede
+    # pasar es que ESTE usuario duplique su propio item_id.
+    existing_product = db.execute(
+        select(Product).where(Product.user_id == current_user.id, Product.item_id == item_id)
+    ).scalar_one_or_none()
     if existing_product is not None:
         raise HTTPException(status_code=409, detail=f"El producto {item_id} ya está siendo monitoreado.")
 
-    product = Product(item_id=item_id, url=payload.url)
+    product = Product(item_id=item_id, url=payload.url, user_id=current_user.id)
     db.add(product)
     try:
         db.commit()
     except IntegrityError:
-        # Red de seguridad ante condiciones de carrera: el chequeo de
-        # arriba no es atómico con este insert. El constraint UNIQUE de
-        # la base es la fuente de verdad real.
         db.rollback()
-        raise HTTPException(status_code=409, detail=f"El producto {item_id} ya está siendo monitoreado.")
+        # No asumir que la IntegrityError fue el UNIQUE de (user_id,
+        # item_id): se reconsulta para confirmar la causa real en vez de
+        # adivinar a partir del texto de la excepción (que varía entre
+        # Postgres y SQLite, y es información interna que no queremos
+        # parsear).
+        conflicto = db.execute(
+            select(Product).where(Product.user_id == current_user.id, Product.item_id == item_id)
+        ).scalar_one_or_none()
+        if conflicto is not None:
+            raise HTTPException(status_code=409, detail=f"El producto {item_id} ya está siendo monitoreado.")
+
+        # Cualquier otro motivo (FK inválida, columna NOT NULL sin
+        # completar, etc.) es un fallo real del servidor: se loguea con
+        # detalle y se responde genérico, sin exponerlo al cliente.
+        logger.exception(
+            "IntegrityError inesperada creando producto (no fue un item_id duplicado)",
+            extra={"item_id": item_id, "user_id": current_user.id},
+        )
+        raise HTTPException(status_code=500, detail="No se pudo crear el producto en este momento.")
     db.refresh(product)
 
     try:
@@ -186,12 +220,13 @@ def create_product(payload: ProductCreateRequest, db: Session = Depends(get_db))
     )
 
 
-def _ranked_price_checks_subquery():
+def ranked_price_checks_subquery():
     """
     Subquery con row_number() particionado por producto y ordenado por
     fecha descendente: rn=1 es el PriceCheck más reciente, rn=2 el
-    anterior. Se usa dos veces (alias distintos) en list_products para
-    traer precio_actual y precio_anterior en una sola query, sin N+1.
+    anterior. Se usa dos veces (alias distintos) para traer precio_actual
+    y precio_anterior en una sola query, sin N+1. La reutiliza también
+    app/admin.py para su listado global de productos.
     """
     return select(
         PriceCheck.product_id,
@@ -205,9 +240,9 @@ def _ranked_price_checks_subquery():
 
 
 @router.get("", response_model=List[ProductListItem])
-def list_products(db: Session = Depends(get_db)):
-    latest = _ranked_price_checks_subquery()
-    previous = _ranked_price_checks_subquery()
+def list_products(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    latest = ranked_price_checks_subquery()
+    previous = ranked_price_checks_subquery()
 
     query = (
         select(
@@ -217,6 +252,7 @@ def list_products(db: Session = Depends(get_db)):
             latest.c.checked_at,
             previous.c.price,
         )
+        .where(Product.user_id == current_user.id)
         .outerjoin(latest, (latest.c.product_id == Product.id) & (latest.c.rn == 1))
         .outerjoin(previous, (previous.c.product_id == Product.id) & (previous.c.rn == 2))
         .order_by(Product.id)
@@ -240,16 +276,20 @@ def list_products(db: Session = Depends(get_db)):
 
 
 @router.post("/scan-all", response_model=ScanAllResult)
-def scan_all_products(db: Session = Depends(get_db)):
+def scan_all_products(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # La lógica vive en app/scheduler.py (run_scan_all): la comparte este
-    # endpoint y el job programado, no se duplica.
-    summary = run_scan_all(db)
+    # endpoint y el job programado, no se duplica. Acá se acota a los
+    # productos del usuario autenticado; el job programado (sin user_id)
+    # escanea los de todos.
+    summary = run_scan_all(db, user_id=current_user.id)
     return ScanAllResult(**summary)
 
 
 @router.post("/{product_id}/scan", response_model=PriceCheckOut)
-def scan_product(product_id: int, db: Session = Depends(get_db)):
-    product = db.get(Product, product_id)
+def scan_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    product = db.execute(
+        select(Product).where(Product.id == product_id, Product.user_id == current_user.id)
+    ).scalar_one_or_none()
     if product is None:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
 
@@ -273,8 +313,10 @@ def scan_product(product_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{product_id}", status_code=204)
-def delete_product(product_id: int, db: Session = Depends(get_db)):
-    product = db.get(Product, product_id)
+def delete_product(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    product = db.execute(
+        select(Product).where(Product.id == product_id, Product.user_id == current_user.id)
+    ).scalar_one_or_none()
     if product is None:
         raise HTTPException(status_code=404, detail="Producto no encontrado.")
     db.delete(product)

@@ -11,7 +11,7 @@ import pytest
 import requests
 
 from app.ml_client import fetch_and_store_price
-from app.models import PriceCheck, Product
+from app.models import PriceCheck, Product, User, UserRole
 
 
 def _make_response(status_code=200, json_data=None, headers=None):
@@ -27,7 +27,23 @@ def _make_response(status_code=200, json_data=None, headers=None):
 
 
 def _make_product(db_session, item_id="MLC123456789", title=None):
-    product = Product(item_id=item_id, url=f"https://articulo.mercadolibre.cl/{item_id}", title=title)
+    # Product.user_id es NOT NULL: se crea un usuario dueño mínimo para
+    # satisfacer la FK, aunque estos tests no ejercitan nada relacionado
+    # con usuarios.
+    user = User(
+        username=f"user-{item_id}",
+        password_hash="unused-hash-solo-para-satisfacer-not-null",
+        role=UserRole.USER,
+    )
+    db_session.add(user)
+    db_session.commit()
+
+    product = Product(
+        item_id=item_id,
+        url=f"https://articulo.mercadolibre.cl/{item_id}",
+        title=title,
+        user=user,
+    )
     db_session.add(product)
     db_session.commit()
     return product

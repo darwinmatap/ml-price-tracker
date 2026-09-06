@@ -1,39 +1,26 @@
 """
 Tests del endpoint de autenticación (app/auth.py) contra la app FastAPI
-real vía TestClient. No se toca ninguna base de datos ni servicio externo
-real: SECRET_KEY/APP_USERNAME/APP_PASSWORD_HASH de prueba vienen de
-tests/conftest.py, y el fixture autouse _reset_auth_security_state limpia
-el rate limiter (slowapi) y el bloqueo progresivo entre cada test.
+real vía TestClient. La app y sus credenciales de prueba (SECRET_KEY)
+vienen de tests/conftest.py; el fixture client (también en conftest)
+sobreescribe get_db para usar una sesión SQLite en memoria aislada por
+test. El fixture autouse _reset_auth_security_state limpia el rate
+limiter (slowapi) y el bloqueo progresivo entre cada test.
 """
 
 from datetime import timedelta
 
 import jwt
-import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import ALGORITHM, GENERIC_AUTH_ERROR_DETAIL, SECRET_KEY, _create_token, limiter
-from app.main import app
-from tests.conftest import TEST_PASSWORD, TEST_USERNAME
-
-
-@pytest.fixture()
-def client():
-    """
-    Cliente nuevo por test: evita que las cookies de un test contaminen otro.
-    base_url en https porque la cookie de refresh se emite con Secure=True
-    (correcto para producción); TestClient usa http:// por defecto y un
-    cliente respetuoso del flag Secure jamás reenviaría la cookie sobre
-    http en el siguiente request.
-    """
-    return TestClient(app, base_url="https://testserver")
+from tests.conftest import TEST_PASSWORD, TEST_USERNAME, create_user
 
 
 def _decode(token: str) -> dict:
     return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
 
 
-def test_login_correcto_devuelve_access_token_y_cookie_de_refresh(client):
+def test_login_correcto_devuelve_access_token_y_cookie_de_refresh(client: TestClient, test_user):
     response = client.post(
         "/auth/login",
         json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
@@ -46,6 +33,8 @@ def test_login_correcto_devuelve_access_token_y_cookie_de_refresh(client):
     payload = _decode(body["access_token"])
     assert payload["sub"] == TEST_USERNAME
     assert payload["type"] == "access"
+    assert payload["user_id"] == test_user.id
+    assert payload["role"] == "user"
 
     set_cookie_header = response.headers.get("set-cookie", "").lower()
     assert "refresh_token=" in set_cookie_header
@@ -54,7 +43,7 @@ def test_login_correcto_devuelve_access_token_y_cookie_de_refresh(client):
     assert "samesite=strict" in set_cookie_header
 
 
-def test_login_clave_incorrecta_mensaje_generico(client):
+def test_login_clave_incorrecta_mensaje_generico(client: TestClient, test_user):
     response = client.post(
         "/auth/login",
         json={"username": TEST_USERNAME, "password": "clave-incorrecta"},
@@ -64,7 +53,7 @@ def test_login_clave_incorrecta_mensaje_generico(client):
     assert response.json()["detail"] == GENERIC_AUTH_ERROR_DETAIL
 
 
-def test_login_usuario_incorrecto_mismo_mensaje_generico(client):
+def test_login_usuario_incorrecto_mismo_mensaje_generico(client: TestClient):
     response = client.post(
         "/auth/login",
         json={"username": "usuario-que-no-existe", "password": TEST_PASSWORD},
@@ -74,7 +63,21 @@ def test_login_usuario_incorrecto_mismo_mensaje_generico(client):
     assert response.json()["detail"] == GENERIC_AUTH_ERROR_DETAIL
 
 
-def test_refresh_valido_devuelve_nuevo_access_token(client):
+def test_login_usuario_inactivo_mismo_mensaje_generico(client: TestClient, db_session):
+    create_user(db_session, username="usuario_inactivo", password="Otra-Clave-Valida1", is_active=False)  # gitleaks:allow
+
+    response = client.post(
+        "/auth/login",
+        json={"username": "usuario_inactivo", "password": "Otra-Clave-Valida1"},  # gitleaks:allow
+    )
+
+    # Mismo código y mismo mensaje que credenciales inválidas o usuario
+    # inexistente: is_active=False no debe ser distinguible desde afuera.
+    assert response.status_code == 401
+    assert response.json()["detail"] == GENERIC_AUTH_ERROR_DETAIL
+
+
+def test_refresh_valido_devuelve_nuevo_access_token(client: TestClient, test_user):
     login_response = client.post(
         "/auth/login",
         json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
@@ -87,9 +90,10 @@ def test_refresh_valido_devuelve_nuevo_access_token(client):
     payload = _decode(refresh_response.json()["access_token"])
     assert payload["sub"] == TEST_USERNAME
     assert payload["type"] == "access"
+    assert payload["user_id"] == test_user.id
 
 
-def test_refresh_exitoso_rota_el_jti(client):
+def test_refresh_exitoso_rota_el_jti(client: TestClient, test_user):
     login_response = client.post(
         "/auth/login",
         json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
@@ -106,7 +110,7 @@ def test_refresh_exitoso_rota_el_jti(client):
     assert new_jti != old_jti
 
 
-def test_reusar_refresh_token_ya_rotado_devuelve_401_y_loguea_warning(client, caplog):
+def test_reusar_refresh_token_ya_rotado_devuelve_401_y_loguea_warning(client: TestClient, test_user, caplog):
     login_response = client.post(
         "/auth/login",
         json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
@@ -127,7 +131,7 @@ def test_reusar_refresh_token_ya_rotado_devuelve_401_y_loguea_warning(client, ca
     assert any("reuso" in record.message.lower() for record in caplog.records)
 
 
-def test_logout_invalida_la_sesion_y_borra_la_cookie(client):
+def test_logout_invalida_la_sesion_y_borra_la_cookie(client: TestClient, test_user):
     login_response = client.post(
         "/auth/login",
         json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
@@ -148,7 +152,7 @@ def test_logout_invalida_la_sesion_y_borra_la_cookie(client):
     assert refresh_after_logout.json()["detail"] == GENERIC_AUTH_ERROR_DETAIL
 
 
-def test_refresh_con_token_expirado_devuelve_401_generico(client):
+def test_refresh_con_token_expirado_devuelve_401_generico(client: TestClient):
     expired_refresh_token = _create_token(
         subject=TEST_USERNAME,
         token_type="refresh",
@@ -162,7 +166,7 @@ def test_refresh_con_token_expirado_devuelve_401_generico(client):
     assert response.json()["detail"] == GENERIC_AUTH_ERROR_DETAIL
 
 
-def test_rate_limit_se_activa_en_el_sexto_intento(client):
+def test_rate_limit_se_activa_en_el_sexto_intento(client: TestClient, test_user):
     for _ in range(5):
         response = client.post(
             "/auth/login",
@@ -177,7 +181,7 @@ def test_rate_limit_se_activa_en_el_sexto_intento(client):
     assert sexto.status_code == 429
 
 
-def test_bloqueo_progresivo_se_activa_en_el_quinto_fallo(client):
+def test_bloqueo_progresivo_se_activa_en_el_quinto_fallo(client: TestClient, test_user):
     # Se resetea el rate limiter entre cada llamada para aislar el bloqueo
     # progresivo del límite de slowapi (ambos usan 5 como umbral, pero son
     # mecanismos independientes: este test prueba que el bloqueo por

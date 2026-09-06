@@ -14,9 +14,10 @@ El esquema se versiona con Alembic (ver alembic/). No usar Base.metadata.create_
 para crear o modificar tablas fuera de las migraciones.
 """
 
+import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -26,15 +27,56 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-class Product(Base):
-    __tablename__ = "products"
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    USER = "user"
+
+
+class User(Base):
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    item_id = Column(String, unique=True, nullable=False, index=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    role = Column(
+        Enum(UserRole, name="user_role", values_callable=lambda enum_cls: [e.value for e in enum_cls]),
+        nullable=False,
+        default=UserRole.USER,
+    )
+    is_active = Column(Boolean, nullable=False, default=True)
+    debe_cambiar_password = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    products = relationship(
+        "Product",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class Product(Base):
+    __tablename__ = "products"
+    __table_args__ = (
+        # Dos usuarios distintos pueden monitorear el mismo producto de
+        # Mercado Libre de forma independiente (cada uno con su propia
+        # fila); lo que NO puede pasar es que el mismo usuario duplique
+        # su propio item_id. Por eso el UNIQUE es compuesto, no solo
+        # sobre item_id.
+        UniqueConstraint("user_id", "item_id", name="uq_products_user_id_item_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    item_id = Column(String, nullable=False)
     url = Column(String, nullable=False)
     title = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow)
 
+    user = relationship("User", back_populates="products")
     price_checks = relationship(
         "PriceCheck",
         back_populates="product",

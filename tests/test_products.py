@@ -12,8 +12,18 @@ from decimal import Decimal
 from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
+from tests.conftest import create_user
 from tests.conftest import make_ml_response as _make_ml_response
+
+
+def _login_as(client, db_session, username, password="Otra-Clave-Valida1"):  # gitleaks:allow -- password sintética de fixture de test
+    create_user(db_session, username=username, password=password)
+    response = client.post("/auth/login", json={"username": username, "password": password})
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
 
 
 @patch("app.ml_client.requests.get")
@@ -78,6 +88,22 @@ def test_agregar_producto_item_id_duplicado_409(mock_get, client, auth_headers):
 
     segundo = client.post("/products", json={"url": url}, headers=auth_headers)
     assert segundo.status_code == 409
+
+
+@patch("app.ml_client.requests.get")
+def test_dos_usuarios_distintos_pueden_agregar_el_mismo_item_id(mock_get, client, auth_headers, db_session):
+    mock_get.return_value = _make_ml_response(200, {"price": 1000, "currency_id": "CLP", "title": "Producto"})
+    url = "https://articulo.mercadolibre.cl/MLC-200000099-producto-compartido"
+
+    primero = client.post("/products", json={"url": url}, headers=auth_headers)
+    assert primero.status_code == 201
+
+    otro_headers = _login_as(client, db_session, "usuario_compartido")
+    segundo = client.post("/products", json={"url": url}, headers=otro_headers)
+
+    assert segundo.status_code == 201
+    assert primero.json()["item_id"] == segundo.json()["item_id"] == "MLC200000099"
+    assert primero.json()["id"] != segundo.json()["id"]  # dos filas independientes
 
 
 @patch("app.ml_client.requests.get")
@@ -173,6 +199,58 @@ def test_eliminar_producto_204_y_luego_404(mock_get, client, auth_headers):
 def test_eliminar_producto_inexistente_404(client, auth_headers):
     response = client.delete("/products/999999", headers=auth_headers)
     assert response.status_code == 404
+
+
+@patch("app.ml_client.requests.get")
+def test_usuario_no_puede_ver_escanear_ni_borrar_producto_de_otro_404(mock_get, client, auth_headers, db_session):
+    mock_get.return_value = _make_ml_response(200, {"price": 1000, "currency_id": "CLP", "title": "Producto de A"})
+    crear = client.post(
+        "/products",
+        json={"url": "https://articulo.mercadolibre.cl/MLC-600000011-producto-a"},
+        headers=auth_headers,
+    )
+    assert crear.status_code == 201
+    product_id = crear.json()["id"]
+
+    otro_headers = _login_as(client, db_session, "otro_usuario")
+
+    # No aparece en el listado del otro usuario.
+    listado_otro = client.get("/products", headers=otro_headers).json()
+    assert all(item["id"] != product_id for item in listado_otro)
+
+    # Scan del producto ajeno -> 404 (no 403: no se revela que existe).
+    scan = client.post(f"/products/{product_id}/scan", headers=otro_headers)
+    assert scan.status_code == 404
+    mock_get.assert_called_once()  # solo la llamada de la creación original, el scan ajeno no llegó a la API
+
+    # Delete del producto ajeno -> 404 (no 403).
+    borrar = client.delete(f"/products/{product_id}", headers=otro_headers)
+    assert borrar.status_code == 404
+
+    # El producto sigue existiendo, intacto, para su dueño real.
+    listado_dueno = client.get("/products", headers=auth_headers).json()
+    assert any(item["id"] == product_id for item in listado_dueno)
+
+
+@patch("app.ml_client.requests.get")
+def test_integrity_error_no_relacionada_a_duplicado_responde_500(mock_get, client, auth_headers, db_session):
+    # Simula una IntegrityError que NO es por el UNIQUE de item_id (p.ej.
+    # una FK inválida u otra constraint) forzando que commit() falle,
+    # sin que exista ningún producto previo con ese item_id.
+    with patch.object(
+        db_session,
+        "commit",
+        side_effect=IntegrityError("INSERT INTO products ...", {}, Exception("constraint no relacionada")),
+    ):
+        response = client.post(
+            "/products",
+            json={"url": "https://articulo.mercadolibre.cl/MLC-999999998-x"},
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "No se pudo crear el producto en este momento."
+    mock_get.assert_not_called()  # nunca se llegó a consultar el precio
 
 
 @pytest.mark.parametrize(

@@ -24,6 +24,7 @@ Política de errores del job:
 """
 
 import logging
+from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import select
@@ -38,15 +39,22 @@ logger = logging.getLogger(__name__)
 SCAN_ALL_JOB_ID = "scan_all_products_hourly"
 
 
-def run_scan_all(db_session: Session) -> dict:
+def run_scan_all(db_session: Session, user_id: Optional[int] = None) -> dict:
     """
-    Escanea todos los productos y guarda su precio actual vía
-    fetch_and_store_price. Sigue procesando el resto aunque uno falle.
+    Escanea productos y guarda su precio actual vía fetch_and_store_price.
+    Sigue procesando el resto aunque uno falle.
+
+    user_id=None (uso del job programado): escanea los productos de TODOS
+    los usuarios. user_id=<id> (uso del endpoint POST /products/scan-all):
+    escanea solo los productos de ese usuario.
 
     Devuelve un resumen:
     {"total": int, "exitosos": int, "fallidos": int, "item_ids_fallidos": [str, ...]}
     """
-    products = db_session.execute(select(Product).order_by(Product.id)).scalars().all()
+    query = select(Product).order_by(Product.id)
+    if user_id is not None:
+        query = query.where(Product.user_id == user_id)
+    products = db_session.execute(query).scalars().all()
 
     exitosos = 0
     fallidos_item_ids: list = []
