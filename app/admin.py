@@ -33,6 +33,7 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(requir
 
 class CreateUserRequest(BaseModel):
     username: str = Field(min_length=3, max_length=150)
+    nombre: str = Field(min_length=1, max_length=200)
     # Password TEMPORAL: el usuario queda con debe_cambiar_password=True.
     password: str = Field(min_length=8, max_length=200)
 
@@ -42,6 +43,7 @@ class UserOut(BaseModel):
 
     id: int
     username: str
+    nombre: str
     role: UserRole
     is_active: bool
     debe_cambiar_password: bool
@@ -71,6 +73,7 @@ def create_user(payload: CreateUserRequest, db: Session = Depends(get_db)):
 
     user = User(
         username=payload.username,
+        nombre=payload.nombre,
         password_hash=pwd_context.hash(payload.password),
         role=UserRole.USER,
         is_active=True,

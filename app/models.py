@@ -37,6 +37,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     username = Column(String, unique=True, nullable=False, index=True)
+    nombre = Column(String, nullable=False)
     password_hash = Column(String, nullable=False)
     role = Column(
         Enum(UserRole, name="user_role", values_callable=lambda enum_cls: [e.value for e in enum_cls]),

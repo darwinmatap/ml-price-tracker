@@ -35,7 +35,7 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -321,6 +321,16 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class UserMeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    nombre: str
+    role: UserRole
+    debe_cambiar_password: bool
+
+
 # --- Router ---
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -435,3 +445,9 @@ def logout(request: Request, response: Response):
         samesite="strict",
     )
     return {"detail": "Sesión cerrada"}
+
+
+@router.get("/me", response_model=UserMeResponse)
+def me(current_user: User = Depends(get_current_user)):
+    """Datos del usuario logueado, para que el frontend los consulte. Nunca incluye password_hash."""
+    return current_user

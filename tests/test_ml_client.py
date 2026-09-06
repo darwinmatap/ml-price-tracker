@@ -32,6 +32,7 @@ def _make_product(db_session, item_id="MLC123456789", title=None):
     # con usuarios.
     user = User(
         username=f"user-{item_id}",
+        nombre="Usuario de Prueba",
         password_hash="unused-hash-solo-para-satisfacer-not-null",
         role=UserRole.USER,
     )

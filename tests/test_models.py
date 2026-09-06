@@ -15,7 +15,7 @@ from app.models import PriceCheck, Product, User, UserRole
 
 
 def _make_user(db_session, username="usuario-de-prueba"):
-    user = User(username=username, password_hash="hash-de-prueba", role=UserRole.USER)
+    user = User(username=username, nombre="Usuario de Prueba", password_hash="hash-de-prueba", role=UserRole.USER)
     db_session.add(user)
     db_session.commit()
     return user
@@ -61,10 +61,10 @@ def test_price_check_requiere_product_existente(db_session):
 
 
 def test_no_permite_username_duplicado(db_session):
-    db_session.add(User(username="admin", password_hash="hash1", role=UserRole.ADMIN))
+    db_session.add(User(username="admin", nombre="Admin Uno", password_hash="hash1", role=UserRole.ADMIN))
     db_session.commit()
 
-    db_session.add(User(username="admin", password_hash="hash2", role=UserRole.USER))
+    db_session.add(User(username="admin", nombre="Admin Dos", password_hash="hash2", role=UserRole.USER))
     with pytest.raises(IntegrityError):
         db_session.commit()
 

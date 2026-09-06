@@ -13,7 +13,7 @@ import jwt
 from fastapi.testclient import TestClient
 
 from app.auth import ALGORITHM, GENERIC_AUTH_ERROR_DETAIL, SECRET_KEY, _create_token, limiter
-from tests.conftest import TEST_PASSWORD, TEST_USERNAME, create_user
+from tests.conftest import TEST_NOMBRE, TEST_PASSWORD, TEST_USERNAME, create_user
 
 
 def _decode(token: str) -> dict:
@@ -41,6 +41,31 @@ def test_login_correcto_devuelve_access_token_y_cookie_de_refresh(client: TestCl
     assert "httponly" in set_cookie_header
     assert "secure" in set_cookie_header
     assert "samesite=strict" in set_cookie_header
+
+
+def test_me_devuelve_datos_del_usuario_logueado_sin_password_hash(client: TestClient, test_user):
+    login_response = client.post(
+        "/auth/login",
+        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+    )
+    access_token = login_response.json()["access_token"]
+
+    response = client.get("/auth/me", headers={"Authorization": f"Bearer {access_token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == test_user.id
+    assert body["username"] == TEST_USERNAME
+    assert body["nombre"] == TEST_NOMBRE
+    assert body["role"] == "user"
+    assert body["debe_cambiar_password"] is False
+    assert "password_hash" not in body
+    assert "password" not in body
+
+
+def test_me_sin_token_devuelve_401(client: TestClient):
+    response = client.get("/auth/me")
+    assert response.status_code == 401
 
 
 def test_login_clave_incorrecta_mensaje_generico(client: TestClient, test_user):

@@ -28,13 +28,14 @@ def test_sin_token_admin_devuelve_401_no_403(client):
 def test_post_admin_users_crea_usuario_con_debe_cambiar_password_true(client, admin_auth_headers):
     response = client.post(
         "/admin/users",
-        json={"username": "nuevo_usuario", "password": "Password-Temporal1"},
+        json={"username": "nuevo_usuario", "nombre": "Usuario Nuevo", "password": "Password-Temporal1"},
         headers=admin_auth_headers,
     )
 
     assert response.status_code == 201
     body = response.json()
     assert body["username"] == "nuevo_usuario"
+    assert body["nombre"] == "Usuario Nuevo"
     assert body["role"] == "user"
     assert body["is_active"] is True
     assert body["debe_cambiar_password"] is True
@@ -45,7 +46,7 @@ def test_post_admin_users_crea_usuario_con_debe_cambiar_password_true(client, ad
 def test_post_admin_users_username_duplicado_409(client, admin_auth_headers, test_user):
     response = client.post(
         "/admin/users",
-        json={"username": TEST_USERNAME, "password": "Password-Temporal1"},
+        json={"username": TEST_USERNAME, "nombre": "Alguien", "password": "Password-Temporal1"},
         headers=admin_auth_headers,
     )
 

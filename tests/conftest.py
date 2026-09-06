@@ -11,8 +11,10 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-solo-para-tests-no-usar-en-
 
 TEST_USERNAME = "usuario_test"
 TEST_PASSWORD = "S3cur3-Test-Password!"
+TEST_NOMBRE = "Usuario de Prueba"
 TEST_ADMIN_USERNAME = "admin_test"
 TEST_ADMIN_PASSWORD = "Adm1n-Test-Password!"
+TEST_ADMIN_NOMBRE = "Admin de Prueba"
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -95,6 +97,7 @@ def create_user(
     db_session,
     username=TEST_USERNAME,
     password=TEST_PASSWORD,
+    nombre="Usuario de Prueba",
     role=UserRole.USER,
     is_active=True,
     debe_cambiar_password=False,
@@ -102,6 +105,7 @@ def create_user(
     """Crea y comitea un User de prueba directamente vía el ORM."""
     user = User(
         username=username,
+        nombre=nombre,
         password_hash=_pwd_context.hash(password),
         role=role,
         is_active=is_active,
@@ -116,7 +120,13 @@ def create_user(
 @pytest.fixture()
 def test_user(db_session):
     """Usuario normal (role=user) ya persistido, listo para loguearse."""
-    return create_user(db_session, username=TEST_USERNAME, password=TEST_PASSWORD, role=UserRole.USER)
+    return create_user(
+        db_session,
+        username=TEST_USERNAME,
+        password=TEST_PASSWORD,
+        nombre=TEST_NOMBRE,
+        role=UserRole.USER,
+    )
 
 
 @pytest.fixture()
@@ -126,6 +136,7 @@ def test_admin(db_session):
         db_session,
         username=TEST_ADMIN_USERNAME,
         password=TEST_ADMIN_PASSWORD,
+        nombre=TEST_ADMIN_NOMBRE,
         role=UserRole.ADMIN,
     )
 

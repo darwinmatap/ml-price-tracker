@@ -42,6 +42,14 @@ def _prompt_username() -> str:
     return username
 
 
+def _prompt_nombre() -> str:
+    nombre = input("Nombre del admin: ").strip()
+    if not nombre:
+        print("El nombre no puede estar vacío.", file=sys.stderr)
+        sys.exit(1)
+    return nombre
+
+
 def _prompt_password() -> str:
     password = getpass.getpass("Password del admin: ")
     if not password:
@@ -65,10 +73,12 @@ def main() -> None:
             print(f"Ya existe un usuario con username '{username}'.", file=sys.stderr)
             sys.exit(1)
 
+        nombre = _prompt_nombre()
         password = _prompt_password()
 
         admin = User(
             username=username,
+            nombre=nombre,
             password_hash=pwd_context.hash(password),
             role=UserRole.ADMIN,
             is_active=True,
