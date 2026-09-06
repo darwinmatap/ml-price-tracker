@@ -8,7 +8,7 @@
     {% block extra_head %}{% endblock %}
   </head>
   <body>
-    <main class="page">{% block content %}{% endblock %}</main>
+    <main class="page {% block page_class %}{% endblock %}">{% block content %}{% endblock %}</main>
     {% block extra_scripts %}{% endblock %}
   </body>
 </html>

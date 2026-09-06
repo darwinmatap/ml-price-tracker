@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Mis productos · ML Price Tracker{% endblock %}
+
+{% block page_class %}page--wide{% endblock %}
+
+{% block content %}
+<div class="container">
+  <header class="app-header">
+    <h1 id="user-greeting" class="app-header__greeting">Hola</h1>
+    <button id="logout-button" type="button" class="btn btn-secondary">Cerrar sesión</button>
+  </header>
+
+  <form id="add-product-form" class="add-product-form" novalidate>
+    <div class="field">
+      <label for="product-url">Link del producto en Mercado Libre</label>
+      <input
+        type="url"
+        id="product-url"
+        name="product-url"
+        placeholder="https://articulo.mercadolibre.cl/..."
+        required
+      />
+    </div>
+    <button type="submit" class="btn btn-primary">Agregar</button>
+  </form>
+
+  <div id="add-product-error" class="message message--error" role="alert" hidden></div>
+
+  <div id="empty-state" class="empty-state" hidden>
+    <p>Todavía no estás monitoreando ningún producto.</p>
+    <p>Pega arriba el link de una publicación de Mercado Libre para empezar.</p>
+  </div>
+
+  <div id="products-grid" class="products-grid" hidden></div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/productos.js"></script>
+{% endblock %}

@@ -1,13 +1,11 @@
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("login-form");
   const errorBox = document.getElementById("login-error");
-  const successBox = document.getElementById("login-success");
   const submitButton = form.querySelector("button[type=submit]");
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     errorBox.hidden = true;
-    successBox.hidden = true;
     submitButton.disabled = true;
 
     const username = form.username.value;
@@ -48,12 +46,7 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // La vista de "mis productos" todavía no existe (siguiente paso).
-      // Por ahora se confirma el login acá mismo en vez de redirigir a
-      // una ruta que no existe.
-      form.hidden = true;
-      successBox.textContent = `Sesión iniciada correctamente. Hola, ${me.nombre}.`;
-      successBox.hidden = false;
+      window.location.href = "/productos";
     } catch (error) {
       errorBox.textContent = "No se pudo conectar con el servidor. Intenta de nuevo.";
       errorBox.hidden = false;

@@ -32,3 +32,10 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Bases de datos locales de desarrollo (SQLite)
+*.db
+*.sqlite3
+
+# Certificados TLS autofirmados de desarrollo local (nunca subir claves privadas)
+certs/

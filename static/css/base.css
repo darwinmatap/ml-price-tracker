@@ -258,3 +258,191 @@ p {
     padding: var(--space-8) var(--space-6);
   }
 }
+
+/* ==========================================================================
+   Vista de productos — página ancha (no centrada tipo card)
+   ========================================================================== */
+
+/* .page--wide cancela el flex-center de .page (pensado para login/cambiar
+   password) sin tocar esas vistas: se activa vía {% block page_class %}. */
+.page--wide {
+  display: block;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.btn-secondary {
+  width: auto;
+  background-color: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-border);
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-primary-light);
+}
+
+.btn-danger {
+  width: auto;
+  background-color: transparent;
+  color: var(--color-danger);
+  border: 1px solid rgba(214, 69, 69, 0.35);
+}
+
+.btn-danger:hover {
+  background-color: var(--color-danger-bg);
+}
+
+/* --- Encabezado --- */
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.app-header__greeting {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* --- Formulario para agregar producto --- */
+
+.add-product-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+}
+
+.add-product-form .field {
+  margin-bottom: 0;
+}
+
+/* --- Grilla de productos: columna en mobile, 2 columnas desde tablet --- */
+
+.products-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+
+.product-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-5);
+}
+
+.product-card__title {
+  font-size: var(--font-size-base);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.product-card__price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.product-card__price-current {
+  font-size: var(--font-size-xl);
+  font-weight: 700;
+}
+
+.product-card__price-currency {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* Señal de tendencia de precio: reutiliza SOLO los colores de éxito/error
+   ya definidos arriba — nunca colores nuevos para esto. */
+.price-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  align-self: flex-start;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.price-trend--down {
+  color: var(--color-success);
+  background: var(--color-success-bg);
+}
+
+.price-trend--up {
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+}
+
+.product-card__meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.product-card__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: auto;
+}
+
+.product-card__actions .btn {
+  width: auto;
+  flex: 1;
+}
+
+/* --- Estado vacío --- */
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.empty-state p + p {
+  margin-top: var(--space-2);
+}
+
+/* --- Tablet y desktop --- */
+
+@media (min-width: 640px) {
+  .app-header .btn {
+    width: auto;
+  }
+
+  .add-product-form {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .add-product-form .field {
+    flex: 1;
+  }
+
+  .add-product-form .btn {
+    width: auto;
+  }
+
+  .products-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
