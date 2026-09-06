@@ -29,6 +29,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.ml_client import fetch_and_store_price
 from app.models import PriceCheck, Product
+from app.scheduler import run_scan_all
 from app.utils import extract_product_id
 
 logger = logging.getLogger(__name__)
@@ -240,37 +241,10 @@ def list_products(db: Session = Depends(get_db)):
 
 @router.post("/scan-all", response_model=ScanAllResult)
 def scan_all_products(db: Session = Depends(get_db)):
-    products = db.execute(select(Product).order_by(Product.id)).scalars().all()
-
-    exitosos = 0
-    fallidos_item_ids: List[str] = []
-
-    for product in products:
-        try:
-            price_check = fetch_and_store_price(db, product)
-        except Exception:
-            # No se aborta el batch por un producto que falle: se loguea,
-            # se limpia el estado de la sesión (una excepción a mitad de
-            # un commit deja la transacción inválida para el resto de
-            # queries) y se sigue con el siguiente producto.
-            logger.exception(
-                "Error inesperado escaneando producto durante scan-all",
-                extra={"item_id": product.item_id},
-            )
-            db.rollback()
-            price_check = None
-
-        if price_check is not None:
-            exitosos += 1
-        else:
-            fallidos_item_ids.append(product.item_id)
-
-    return ScanAllResult(
-        total=len(products),
-        exitosos=exitosos,
-        fallidos=len(fallidos_item_ids),
-        item_ids_fallidos=fallidos_item_ids,
-    )
+    # La lógica vive en app/scheduler.py (run_scan_all): la comparte este
+    # endpoint y el job programado, no se duplica.
+    summary = run_scan_all(db)
+    return ScanAllResult(**summary)
 
 
 @router.post("/{product_id}/scan", response_model=PriceCheckOut)

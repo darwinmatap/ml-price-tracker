@@ -13,3 +13,4 @@ python-dotenv==1.2.3
 requests==2.34.2
 pyjwt==2.13.0
 slowapi==0.1.10
+apscheduler==3.11.3

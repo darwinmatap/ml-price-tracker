@@ -16,13 +16,18 @@ os.environ.setdefault("APP_USERNAME", TEST_USERNAME)
 os.environ.setdefault("APP_PASSWORD_HASH", _pwd_context.hash(TEST_PASSWORD))
 os.environ.setdefault("SECRET_KEY", "test-secret-key-solo-para-tests-no-usar-en-produccion")
 
+from unittest.mock import MagicMock  # noqa: E402
+
 import pytest  # noqa: E402
+import requests  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, event  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from app.auth import limiter, reset_login_security_state_for_tests  # noqa: E402
-from app.database import Base  # noqa: E402
+from app.database import Base, get_db  # noqa: E402
+from app.main import app  # noqa: E402
 
 
 @pytest.fixture()
@@ -64,3 +69,46 @@ def _reset_auth_security_state():
     yield
     limiter.reset()
     reset_login_security_state_for_tests()
+
+
+@pytest.fixture()
+def client(db_session):
+    """
+    TestClient contra la app real, con get_db sobreescrito para usar la
+    sesión SQLite en memoria aislada de este test (en vez del engine
+    singleton de la app) — así cada test parte de una base vacía.
+    """
+
+    def _override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = _override_get_db
+    test_client = TestClient(app, base_url="https://testserver")
+    try:
+        yield test_client
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture()
+def auth_headers(client):
+    response = client.post(
+        "/auth/login",
+        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+    )
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def make_ml_response(status_code=200, json_data=None):
+    """Mockea una respuesta de requests.get contra la API de Mercado Libre."""
+    response = MagicMock()
+    response.status_code = status_code
+    response.json.return_value = json_data or {}
+    response.headers = {}
+    if status_code >= 400:
+        response.raise_for_status.side_effect = requests.exceptions.HTTPError(f"{status_code} error")
+    else:
+        response.raise_for_status.return_value = None
+    return response

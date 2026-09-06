@@ -4,58 +4,16 @@ FastAPI real vía TestClient. La API de Mercado Libre se mockea siempre
 (unittest.mock, nunca red real); la autenticación es real (login vía
 /auth/login para obtener el token, get_current_user no se mockea).
 
-get_db se sobreescribe para que la app use la misma sesión SQLite en
-memoria aislada por test (fixture db_session de tests/conftest.py) en vez
-del engine singleton de la app real — así cada test parte de una base
-vacía y no hay fugas de datos entre tests.
+Los fixtures client/auth_headers y el helper _make_ml_response viven en
+tests/conftest.py (compartidos con tests/test_scheduler.py).
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-import requests
-from fastapi.testclient import TestClient
 
-from app.database import get_db
-from app.main import app
-from tests.conftest import TEST_PASSWORD, TEST_USERNAME
-
-
-@pytest.fixture()
-def client(db_session):
-    def _override_get_db():
-        yield db_session
-
-    app.dependency_overrides[get_db] = _override_get_db
-    test_client = TestClient(app, base_url="https://testserver")
-    try:
-        yield test_client
-    finally:
-        app.dependency_overrides.pop(get_db, None)
-
-
-@pytest.fixture()
-def auth_headers(client):
-    response = client.post(
-        "/auth/login",
-        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
-    )
-    assert response.status_code == 200
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
-
-
-def _make_ml_response(status_code=200, json_data=None):
-    response = MagicMock()
-    response.status_code = status_code
-    response.json.return_value = json_data or {}
-    response.headers = {}
-    if status_code >= 400:
-        response.raise_for_status.side_effect = requests.exceptions.HTTPError(f"{status_code} error")
-    else:
-        response.raise_for_status.return_value = None
-    return response
+from tests.conftest import make_ml_response as _make_ml_response
 
 
 @patch("app.ml_client.requests.get")
