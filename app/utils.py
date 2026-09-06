@@ -1,6 +1,38 @@
 import re
 from urllib.parse import urlparse
 
+# --- Allowlist de dominios de Mercado Libre ---
+#
+# Solo se aceptan URLs de estos dominios. Nunca se procesa una URL de un
+# dominio fuera de esta lista, para evitar que la app se use como
+# proxy/SSRF hacia hosts arbitrarios. Compartida entre app/products.py y
+# app/url_resolver.py — no duplicar este set en ningún otro lado.
+#
+# NOTA DE SEGURIDAD: la comparación es SIEMPRE sobre el hostname parseado
+# por urlparse(url).hostname (nunca un "in"/substring sobre la URL
+# completa), y es exacta o de sufijo con límite de punto explícito
+# (host == dominio or host.endswith("." + dominio)). Un simple
+# host.startswith("articulo.mercadolibre.") NO es seguro: no valida qué
+# viene después del prefijo, así que "articulo.mercadolibre.atacante.com"
+# lo pasaría (dominio real: atacante.com). Por eso solo se listan dominios
+# completos aquí — para agregar un país nuevo, se agrega su dominio
+# completo a este set, nunca un prefijo abierto.
+ALLOWED_DOMAINS = {
+    "mercadolibre.cl",
+    "mercadolibre.com.ar",
+    "mercadolibre.com.mx",
+    "mercadolibre.com.co",
+    "mercadolibre.com.pe",
+    "mercadolibre.com.uy",
+}
+
+
+def is_allowed_domain(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower()
+    if not host:
+        return False
+    return any(host == domain or host.endswith("." + domain) for domain in ALLOWED_DOMAINS)
+
 
 def extract_product_id(url: str) -> str:
     """

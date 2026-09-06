@@ -24,7 +24,6 @@ import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import List, Optional
-from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -37,42 +36,12 @@ from app.database import get_db
 from app.ml_client import fetch_and_store_price
 from app.models import PriceCheck, Product, User
 from app.scheduler import run_scan_all
-from app.utils import extract_product_id
+from app.url_resolver import ShortLinkResolutionError, resolve_meli_short_link
+from app.utils import extract_product_id, is_allowed_domain
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/products", tags=["products"], dependencies=[Depends(get_current_user)])
-
-# --- Allowlist de dominios ---
-#
-# Solo se aceptan URLs de dominios de Mercado Libre reconocidos. Nunca se
-# procesa una URL de un dominio fuera de esta lista, para evitar que el
-# endpoint se use como proxy/SSRF hacia hosts arbitrarios.
-#
-# NOTA DE SEGURIDAD: la comparación es SIEMPRE sobre el hostname parseado
-# por urlparse(url).hostname (nunca un "in"/substring sobre la URL
-# completa), y es exacta o de sufijo con límite de punto explícito
-# (host == dominio or host.endswith("." + dominio)). Un simple
-# host.startswith("articulo.mercadolibre.") NO es seguro: no valida qué
-# viene después del prefijo, así que "articulo.mercadolibre.atacante.com"
-# lo pasaría (dominio real: atacante.com). Por eso solo se listan dominios
-# completos aquí — para agregar un país nuevo, se agrega su dominio
-# completo a este set, nunca un prefijo abierto.
-ALLOWED_DOMAINS = {
-    "mercadolibre.cl",
-    "mercadolibre.com.ar",
-    "mercadolibre.com.mx",
-    "mercadolibre.com.co",
-    "mercadolibre.com.pe",
-    "mercadolibre.com.uy",
-}
-
-
-def _is_allowed_domain(url: str) -> bool:
-    host = (urlparse(url).hostname or "").lower()
-    if not host:
-        return False
-    return any(host == domain or host.endswith("." + domain) for domain in ALLOWED_DOMAINS)
 
 
 # --- Esquemas ---
@@ -135,7 +104,15 @@ def create_product(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    if not _is_allowed_domain(payload.url):
+    # resolve_meli_short_link es un no-op (sin tocar la red) si el
+    # hostname no es exactamente "meli.la" — se puede llamar siempre,
+    # sin duplicar ese chequeo acá.
+    try:
+        url = resolve_meli_short_link(payload.url)
+    except ShortLinkResolutionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    if not is_allowed_domain(url):
         raise HTTPException(
             status_code=422,
             detail=(
@@ -145,7 +122,7 @@ def create_product(
         )
 
     try:
-        item_id = extract_product_id(payload.url)
+        item_id = extract_product_id(url)
     except ValueError:
         raise HTTPException(
             status_code=422,
@@ -162,7 +139,7 @@ def create_product(
     if existing_product is not None:
         raise HTTPException(status_code=409, detail=f"El producto {item_id} ya está siendo monitoreado.")
 
-    product = Product(item_id=item_id, url=payload.url, user_id=current_user.id)
+    product = Product(item_id=item_id, url=url, user_id=current_user.id)
     db.add(product)
     try:
         db.commit()

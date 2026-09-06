@@ -9,7 +9,7 @@ tests/conftest.py (compartidos con tests/test_scheduler.py).
 """
 
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -46,6 +46,35 @@ def test_agregar_producto_valido_201_con_primer_precio(mock_get, client, auth_he
     assert Decimal(str(body["precio_actual"])) == Decimal("19990")
     assert body["moneda"] == "CLP"
     assert body["title"] == "Notebook Lenovo"
+
+
+@patch("app.url_resolver.requests.head")
+@patch("app.url_resolver.socket.getaddrinfo")
+@patch("app.ml_client.requests.get")
+def test_agregar_producto_via_meli_la_resuelve_y_crea(mock_get, mock_getaddrinfo, mock_head, client, auth_headers):
+    import socket
+
+    destino_final = "https://articulo.mercadolibre.cl/MLC-200000123-audifonos"
+
+    def _fake_getaddrinfo(host, *args, **kwargs):
+        ip = {"meli.la": "93.184.216.10", "articulo.mercadolibre.cl": "93.184.216.20"}[host]
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, 0))]
+
+    mock_getaddrinfo.side_effect = _fake_getaddrinfo
+
+    redirect_response = MagicMock(status_code=302, headers={"Location": destino_final}, is_redirect=True)
+    final_response = MagicMock(status_code=200, headers={}, is_redirect=False)
+    mock_head.side_effect = [redirect_response, final_response]
+
+    mock_get.return_value = _make_ml_response(200, {"price": 4990, "currency_id": "CLP", "title": "Audífonos"})
+
+    response = client.post("/products", json={"url": "https://meli.la/1BP7AeP"}, headers=auth_headers)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["item_id"] == "MLC200000123"
+    assert body["url"] == destino_final
+    assert Decimal(str(body["precio_actual"])) == Decimal("4990")
 
 
 @patch("app.ml_client.requests.get")
