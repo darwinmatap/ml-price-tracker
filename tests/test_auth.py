@@ -12,7 +12,7 @@ from datetime import timedelta
 import jwt
 from fastapi.testclient import TestClient
 
-from app.auth import ALGORITHM, GENERIC_AUTH_ERROR_DETAIL, SECRET_KEY, _create_token, limiter
+from app.auth import ALGORITHM, GENERIC_AUTH_ERROR_DETAIL, SECRET_KEY, _create_token, limiter, pwd_context
 from tests.conftest import TEST_NOMBRE, TEST_PASSWORD, TEST_USERNAME, create_user
 
 
@@ -227,3 +227,87 @@ def test_bloqueo_progresivo_se_activa_en_el_quinto_fallo(client: TestClient, tes
         json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
     )
     assert bloqueado.status_code == 429
+
+
+def test_change_password_exitoso(client: TestClient, test_user, db_session):
+    login_response = client.post(
+        "/auth/login",
+        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+    )
+    access_token = login_response.json()["access_token"]
+
+    response = client.post(
+        "/auth/change-password",
+        json={"password_actual": TEST_PASSWORD, "password_nueva": "Nueva-Clave-Segura1"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 200
+
+    db_session.refresh(test_user)
+    assert test_user.debe_cambiar_password is False
+    assert pwd_context.verify("Nueva-Clave-Segura1", test_user.password_hash)
+    assert not pwd_context.verify(TEST_PASSWORD, test_user.password_hash)
+
+
+def test_change_password_actual_incorrecta_401(client: TestClient, test_user):
+    login_response = client.post(
+        "/auth/login",
+        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+    )
+    access_token = login_response.json()["access_token"]
+
+    response = client.post(
+        "/auth/change-password",
+        json={"password_actual": "clave-incorrecta", "password_nueva": "Nueva-Clave-Segura1"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == GENERIC_AUTH_ERROR_DETAIL
+
+
+def test_change_password_nueva_muy_corta_422(client: TestClient, test_user):
+    login_response = client.post(
+        "/auth/login",
+        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+    )
+    access_token = login_response.json()["access_token"]
+
+    response = client.post(
+        "/auth/change-password",
+        json={"password_actual": TEST_PASSWORD, "password_nueva": "corta1"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_change_password_invalida_el_refresh_token_anterior(client: TestClient, test_user):
+    login_response = client.post(
+        "/auth/login",
+        json={"username": TEST_USERNAME, "password": TEST_PASSWORD},
+    )
+    access_token = login_response.json()["access_token"]
+    refresh_token_anterior = login_response.cookies["refresh_token"]
+
+    change_response = client.post(
+        "/auth/change-password",
+        json={"password_actual": TEST_PASSWORD, "password_nueva": "Nueva-Clave-Segura1"},
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert change_response.status_code == 200
+
+    client.cookies.set("refresh_token", refresh_token_anterior)
+    refresh_response = client.post("/auth/refresh")
+
+    assert refresh_response.status_code == 401
+    assert refresh_response.json()["detail"] == GENERIC_AUTH_ERROR_DETAIL
+
+
+def test_change_password_sin_token_devuelve_401(client: TestClient):
+    response = client.post(
+        "/auth/change-password",
+        json={"password_actual": "x", "password_nueva": "Nueva-Clave-Segura1"},
+    )
+    assert response.status_code == 401

@@ -35,7 +35,7 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from passlib.context import CryptContext
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy import select
@@ -331,6 +331,14 @@ class UserMeResponse(BaseModel):
     debe_cambiar_password: bool
 
 
+class ChangePasswordRequest(BaseModel):
+    password_actual: str
+    # Mínimo básico de longitud. Se puede endurecer después con reglas de
+    # complejidad (mayúsculas, números, símbolos, etc.) si se requiere;
+    # por ahora 8 caracteres es el piso razonable sin sobre-diseñar.
+    password_nueva: str = Field(min_length=8, max_length=200)
+
+
 # --- Router ---
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -451,3 +459,40 @@ def logout(request: Request, response: Response):
 def me(current_user: User = Depends(get_current_user)):
     """Datos del usuario logueado, para que el frontend los consulte. Nunca incluye password_hash."""
     return current_user
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Cambia la password del usuario autenticado. Tener un access token
+    válido no basta: hay que demostrar que se conoce la password actual
+    (nunca se confía en la sola posesión del JWT para esta operación).
+    """
+    if not pwd_context.verify(payload.password_actual, current_user.password_hash):
+        logger.warning(
+            "Cambio de password rechazado: password actual incorrecta",
+            extra={"ip": get_remote_address(request), "user_id": current_user.id},
+        )
+        raise HTTPException(status_code=401, detail=GENERIC_AUTH_ERROR_DETAIL)
+
+    current_user.password_hash = pwd_context.hash(payload.password_nueva)
+    current_user.debe_cambiar_password = False
+    db.add(current_user)
+    db.commit()
+
+    # Invalida la sesión de refresh vigente: fuerza a loguearse de nuevo
+    # con la clave nueva en cualquier otro dispositivo/pestaña donde
+    # hubiera una sesión abierta.
+    _invalidate_refresh_jti(current_user.id)
+
+    logger.info(
+        "Cambio de credenciales: password actualizada",
+        extra={"user_id": current_user.id, "username": current_user.username},
+    )
+
+    return {"detail": "Password actualizada correctamente."}
