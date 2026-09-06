@@ -6,39 +6,11 @@ en memoria, aislada por test. No tocan la base de datos real de la app.
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from app.database import Base
 from app.models import PriceCheck, Product
 
-
-@pytest.fixture()
-def db_session():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    # SQLite no aplica FOREIGN KEY por defecto; se activa explícitamente
-    # para que las constraints declaradas en los modelos se validen de
-    # verdad en los tests.
-    @event.listens_for(engine, "connect")
-    def _enable_sqlite_fk(dbapi_connection, connection_record):
-        cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-    Base.metadata.create_all(bind=engine)
-    session = sessionmaker(bind=engine)()
-    try:
-        yield session
-    finally:
-        session.close()
-        engine.dispose()
+# La fixture db_session vive en tests/conftest.py (compartida con test_ml_client.py).
 
 
 def test_no_permite_item_id_duplicado(db_session):
