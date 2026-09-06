@@ -1,0 +1,2 @@
+[tool.bandit]
+targets = ["app"]

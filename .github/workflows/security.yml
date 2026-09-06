@@ -1,0 +1,38 @@
+name: Security
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  bandit:
+    name: Bandit (SAST)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install bandit
+        run: pip install bandit
+
+      - name: Run bandit on app/
+        run: bandit -r app/ -lll
+
+  pip-audit:
+    name: pip-audit (dependencias)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit on requirements.txt
+        run: pip-audit -r requirements.txt --strict

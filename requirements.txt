@@ -1,1 +1,7 @@
-requests
+fastapi==0.141.1
+uvicorn==0.52.4
+sqlalchemy==2.0.52
+psycopg2-binary==2.9.12
+passlib[bcrypt]==1.7.4
+python-dotenv==1.2.3
+requests==2.34.2
