@@ -31,3 +31,8 @@ def cambiar_password_page(request: Request):
 @router.get("/productos", response_class=HTMLResponse)
 def productos_page(request: Request):
     return templates.TemplateResponse(request, "productos.html")
+
+
+@router.get("/admin", response_class=HTMLResponse)
+def admin_page(request: Request):
+    return templates.TemplateResponse(request, "admin.html")

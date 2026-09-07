@@ -5,7 +5,7 @@
  */
 document.addEventListener("DOMContentLoaded", async () => {
   const greetingEl = document.getElementById("user-greeting");
-  const logoutButton = document.getElementById("logout-button");
+  const headerActions = document.getElementById("user-greeting-actions");
   const productsGrid = document.getElementById("products-grid");
   const emptyState = document.getElementById("empty-state");
   const addForm = document.getElementById("add-product-form");
@@ -22,17 +22,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await loadUser();
   await loadProducts();
-
-  logoutButton.addEventListener("click", async () => {
-    logoutButton.disabled = true;
-    try {
-      await Auth.apiFetch("/auth/logout", { method: "POST" });
-    } catch (error) {
-      // Aunque falle la llamada de red, igual se cierra la sesión local.
-    }
-    Auth.clearAccessToken();
-    window.location.href = "/login";
-  });
 
   addForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -77,6 +66,40 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     const me = await response.json();
     greetingEl.textContent = `Hola, ${me.nombre}`;
+    buildHeaderActions(me);
+  }
+
+  /**
+   * El link al panel de administrador solo se crea (y por lo tanto solo
+   * existe en el DOM) cuando el rol es "admin" — nunca se renderiza
+   * oculto con CSS para un usuario normal.
+   */
+  function buildHeaderActions(me) {
+    headerActions.replaceChildren();
+
+    if (me.role === "admin") {
+      const adminLink = document.createElement("a");
+      adminLink.href = "/admin";
+      adminLink.className = "btn btn-secondary";
+      adminLink.textContent = "Panel de administrador";
+      headerActions.appendChild(adminLink);
+    }
+
+    const logoutButton = document.createElement("button");
+    logoutButton.type = "button";
+    logoutButton.className = "btn btn-secondary";
+    logoutButton.textContent = "Cerrar sesión";
+    logoutButton.addEventListener("click", async () => {
+      logoutButton.disabled = true;
+      try {
+        await Auth.apiFetch("/auth/logout", { method: "POST" });
+      } catch (error) {
+        // Aunque falle la llamada de red, igual se cierra la sesión local.
+      }
+      Auth.clearAccessToken();
+      window.location.href = "/login";
+    });
+    headerActions.appendChild(logoutButton);
   }
 
   async function loadProducts() {

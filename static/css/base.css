@@ -313,6 +313,17 @@ p {
   letter-spacing: -0.01em;
 }
 
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.app-header__actions .btn {
+  width: auto;
+}
+
 /* --- Formulario para agregar producto --- */
 
 .add-product-form {
@@ -431,11 +442,13 @@ p {
 
   .add-product-form {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: flex-end;
   }
 
   .add-product-form .field {
     flex: 1;
+    min-width: 160px;
   }
 
   .add-product-form .btn {
@@ -444,5 +457,110 @@ p {
 
   .products-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ==========================================================================
+   Panel de administrador
+   ========================================================================== */
+
+.admin-section {
+  margin-bottom: var(--space-6);
+}
+
+.admin-section__title {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  margin-bottom: var(--space-4);
+}
+
+.table-wrapper {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* Mobile-first: cada <tr> se apila como una mini-card y cada <td> muestra
+   su etiqueta vía ::before + data-label — evita el scroll horizontal
+   ilegible de una tabla tradicional en ~375px. */
+.data-table thead {
+  display: none;
+}
+
+.data-table tr {
+  display: block;
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table tr:last-child {
+  border-bottom: none;
+}
+
+.data-table td {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  text-align: right;
+  border: none;
+}
+
+.data-table td::before {
+  content: attr(data-label);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  text-align: left;
+}
+
+/* Celda de acciones vacía (usuario ya inactivo, sin botón): sin etiqueta
+   suelta a la izquierda. */
+.data-table td:empty::before {
+  content: none;
+}
+
+.data-table td[data-label="Acciones"] .btn {
+  width: auto;
+  margin-left: auto;
+}
+
+/* Tablet y desktop: tabla tradicional, sin apilado ni etiquetas. */
+@media (min-width: 640px) {
+  .data-table thead {
+    display: table-header-group;
+  }
+
+  .data-table tr {
+    display: table-row;
+    padding: 0;
+  }
+
+  .data-table th,
+  .data-table td {
+    display: table-cell;
+    text-align: left;
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .data-table td::before {
+    content: none;
+  }
+
+  .data-table thead th {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .data-table td[data-label="Acciones"] .btn {
+    margin-left: 0;
   }
 }

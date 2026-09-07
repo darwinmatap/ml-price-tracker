@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Panel de administrador · ML Price Tracker{% endblock %}
+
+{% block page_class %}page--wide{% endblock %}
+
+{% block content %}
+<div class="container">
+  <header class="app-header">
+    <h1 class="app-header__greeting">Panel de administrador</h1>
+    <div class="app-header__actions">
+      <a href="/productos" class="btn btn-secondary">Volver a mis productos</a>
+      <button id="logout-button" type="button" class="btn btn-secondary">Cerrar sesión</button>
+    </div>
+  </header>
+
+  <section class="admin-section">
+    <h2 class="admin-section__title">Usuarios</h2>
+
+    <form id="create-user-form" class="add-product-form" novalidate>
+      <div class="field">
+        <label for="new-username">Username</label>
+        <input type="text" id="new-username" name="username" minlength="3" maxlength="150" required />
+      </div>
+      <div class="field">
+        <label for="new-nombre">Nombre</label>
+        <input type="text" id="new-nombre" name="nombre" minlength="1" maxlength="200" required />
+      </div>
+      <div class="field">
+        <label for="new-password">Password temporal</label>
+        <input type="password" id="new-password" name="password" minlength="8" maxlength="200" required />
+      </div>
+      <button type="submit" class="btn btn-primary">Crear usuario</button>
+    </form>
+
+    <div id="create-user-error" class="message message--error" role="alert" hidden></div>
+
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>Nombre</th>
+            <th>Rol</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="users-table-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="admin-section">
+    <h2 class="admin-section__title">Todos los productos</h2>
+
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Dueño</th>
+            <th>Título</th>
+            <th>Precio actual</th>
+            <th>Precio anterior</th>
+          </tr>
+        </thead>
+        <tbody id="products-table-body"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="/static/js/auth.js"></script>
+<script src="/static/js/admin.js"></script>
+{% endblock %}
