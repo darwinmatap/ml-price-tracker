@@ -1,0 +1,18 @@
+fastapi
+uvicorn
+sqlalchemy
+alembic
+psycopg2-binary
+passlib[bcrypt]
+# passlib 1.7.4 no es compatible con el cambio de comportamiento introducido
+# en bcrypt>=4.1 (su detección interna de backend rompe con ValueError).
+# Esto no es una preferencia de versión, es una restricción de compatibilidad
+# real: no se debe quitar sin antes resolver esa incompatibilidad.
+# Ver: https://github.com/pyca/bcrypt/issues/684
+bcrypt<4.1
+python-dotenv
+requests
+pyjwt
+slowapi
+apscheduler
+jinja2
