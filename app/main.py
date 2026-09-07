@@ -12,6 +12,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.admin import router as admin_router
 from app.auth import limiter, router as auth_router
+from app.meli_oauth import router as meli_oauth_router
 from app.products import router as products_router
 from app.scheduler import create_scheduler
 from app.security_headers import SecurityHeadersMiddleware
@@ -75,6 +76,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.include_router(auth_router)
 app.include_router(products_router)
 app.include_router(admin_router)
+app.include_router(meli_oauth_router)
 app.include_router(views_router)
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")

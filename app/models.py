@@ -85,6 +85,25 @@ class Product(Base):
     )
 
 
+class MeliOAuthToken(Base):
+    """
+    Conexión OAuth 2.0 de la app con Mercado Libre (no es por-usuario):
+    existe una sola fila, la credencial que la app usa para consultar la
+    API de Mercado Libre autenticada. Se crea/actualiza desde
+    app/meli_oauth.py al completar el flujo de authorization code, y se
+    renueva automáticamente desde app/ml_client.py cuando expires_at está
+    por vencer.
+    """
+
+    __tablename__ = "meli_oauth_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    access_token = Column(String, nullable=False)
+    refresh_token = Column(String, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow)
+
+
 class PriceCheck(Base):
     __tablename__ = "price_checks"
 

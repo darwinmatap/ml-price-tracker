@@ -8,6 +8,9 @@ from passlib.context import CryptContext
 # importación no rompa los tests. Nunca se usan credenciales reales.
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-solo-para-tests-no-usar-en-produccion")
+os.environ.setdefault("MELI_CLIENT_ID", "test-meli-client-id")
+os.environ.setdefault("MELI_CLIENT_SECRET", "test-meli-client-secret-no-real")
+os.environ.setdefault("MELI_REDIRECT_URI", "https://testserver/oauth/mercadolibre/callback")
 
 TEST_USERNAME = "usuario_test"
 TEST_PASSWORD = "S3cur3-Test-Password!"
@@ -27,10 +30,41 @@ from sqlalchemy import create_engine, event  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
+from datetime import datetime, timedelta, timezone  # noqa: E402
+
 from app.auth import limiter, reset_login_security_state_for_tests  # noqa: E402
 from app.database import Base, get_db  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import User, UserRole  # noqa: E402
+from app.meli_oauth import reset_meli_oauth_state_for_tests  # noqa: E402
+from app.models import MeliOAuthToken, User, UserRole  # noqa: E402
+
+# Access/refresh token "por defecto" que db_session siembra en cada test
+# (ver más abajo). Nunca son secretos reales: son literales sintéticos
+# usados solo en memoria dentro de tests.
+DEFAULT_MELI_ACCESS_TOKEN = "test-default-meli-access-token"  # nosec B105 -- literal de test, no un secreto real
+DEFAULT_MELI_REFRESH_TOKEN = "test-default-meli-refresh-token"  # nosec B105 -- literal de test, no un secreto real
+
+
+def _seed_default_meli_token(session) -> None:
+    """
+    fetch_and_store_price (app.ml_client) ahora requiere una conexión
+    OAuth vigente con Mercado Libre (ver get_valid_meli_access_token). La
+    inmensa mayoría de los tests de la suite (productos, admin,
+    scheduler) no ejercitan ese flujo en sí — solo necesitan que la
+    consulta a la API "funcione" — así que db_session parte siempre con
+    una fila de MeliOAuthToken vigente por defecto.
+
+    Los tests que sí ejercitan el flujo OAuth (tests/test_ml_client.py,
+    tests/test_meli_oauth.py) reemplazan o borran esta fila explícitamente
+    cuando necesitan el escenario "no conectado" o "token expirado".
+    """
+    token = MeliOAuthToken(
+        access_token=DEFAULT_MELI_ACCESS_TOKEN,
+        refresh_token=DEFAULT_MELI_REFRESH_TOKEN,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    session.add(token)
+    session.commit()
 
 
 @pytest.fixture()
@@ -53,6 +87,7 @@ def db_session():
 
     Base.metadata.create_all(bind=engine)
     session = sessionmaker(bind=engine)()
+    _seed_default_meli_token(session)
     try:
         yield session
     finally:
@@ -69,9 +104,11 @@ def _reset_auth_security_state():
     """
     limiter.reset()
     reset_login_security_state_for_tests()
+    reset_meli_oauth_state_for_tests()
     yield
     limiter.reset()
     reset_login_security_state_for_tests()
+    reset_meli_oauth_state_for_tests()
 
 
 @pytest.fixture()
