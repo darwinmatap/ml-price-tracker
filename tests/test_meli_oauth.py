@@ -60,23 +60,31 @@ def _make_token_exchange_response(status_code=200, json_data=None):
 
 
 def test_connect_sin_autenticacion_devuelve_401(client: TestClient):
-    response = client.get("/admin/meli/connect", follow_redirects=False)
+    response = client.get("/admin/meli/connect")
     assert response.status_code == 401
 
 
 def test_connect_usuario_no_admin_devuelve_403(client: TestClient, auth_headers):
-    response = client.get("/admin/meli/connect", headers=auth_headers, follow_redirects=False)
+    response = client.get("/admin/meli/connect", headers=auth_headers)
     assert response.status_code == 403
 
 
-def test_connect_admin_redirige_a_mercadolibre_con_state(client: TestClient, admin_auth_headers):
-    response = client.get("/admin/meli/connect", headers=admin_auth_headers, follow_redirects=False)
+def test_connect_admin_devuelve_json_con_url_de_autorizacion_y_state(client: TestClient, admin_auth_headers):
+    """
+    /admin/meli/connect está protegido con Bearer token, así que un
+    navegador no puede navegar directo a la URL (no hay forma de
+    adjuntar el header ahí) — por eso devuelve la URL como JSON en vez
+    de un RedirectResponse; el front (static/js/admin.js) hace la
+    navegación real recién con esa URL en mano.
+    """
+    response = client.get("/admin/meli/connect", headers=admin_auth_headers)
 
-    assert response.status_code in (302, 307)
-    location = response.headers["location"]
-    assert location.startswith(MELI_AUTHORIZATION_URL)
+    assert response.status_code == 200
+    body = response.json()
+    authorization_url = body["authorization_url"]
+    assert authorization_url.startswith(MELI_AUTHORIZATION_URL)
 
-    params = parse_qs(urlparse(location).query)
+    params = parse_qs(urlparse(authorization_url).query)
     assert params["response_type"] == ["code"]
     assert "client_id" in params
     assert "redirect_uri" in params
@@ -84,6 +92,42 @@ def test_connect_admin_redirige_a_mercadolibre_con_state(client: TestClient, adm
 
     # El state generado quedó registrado como pendiente (de un solo uso).
     assert params["state"][0] in _pending_states
+
+
+# --- GET /admin/meli/status ---
+
+
+def test_status_sin_autenticacion_devuelve_401(client: TestClient):
+    response = client.get("/admin/meli/status")
+    assert response.status_code == 401
+
+
+def test_status_usuario_no_admin_devuelve_403(client: TestClient, auth_headers):
+    response = client.get("/admin/meli/status", headers=auth_headers)
+    assert response.status_code == 403
+
+
+def test_status_sin_conexion_devuelve_connected_false(client: TestClient, admin_auth_headers, db_session):
+    _clear_meli_tokens(db_session)
+
+    response = client.get("/admin/meli/status", headers=admin_auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body == {"connected": False, "updated_at": None}
+
+
+def test_status_con_conexion_devuelve_connected_true_y_updated_at(client: TestClient, admin_auth_headers, db_session):
+    # db_session (ver conftest) ya siembra por defecto una fila conectada.
+    response = client.get("/admin/meli/status", headers=admin_auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["connected"] is True
+    assert body["updated_at"] is not None
+    # Nunca se expone el token, ni completo ni truncado, en esta respuesta.
+    assert "access_token" not in body
+    assert "refresh_token" not in body
 
 
 # --- GET /oauth/mercadolibre/callback ---

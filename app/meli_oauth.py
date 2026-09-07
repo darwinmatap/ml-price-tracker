@@ -10,6 +10,13 @@ require_admin — y el callback (GET /oauth/mercadolibre/callback) NO puede
 requerir un JWT nuestro: Mercado Libre redirige el navegador del admin
 directo a esa URL, sin ningún header nuestro.
 
+GET /admin/meli/connect devuelve la URL de autorización como JSON (no un
+RedirectResponse): al estar protegido con Bearer token, un navegador no
+tiene forma de adjuntar ese header si se navega directo a la URL — el
+front (ver static/js/admin.js) llama al endpoint vía fetch con el header,
+y recién con la URL ya en la respuesta hace la navegación real
+(window.location.href) hacia Mercado Libre.
+
 Política de "state" (protección CSRF/replay del flujo OAuth):
 - Se genera con secrets.token_urlsafe (aleatoriedad criptográfica) al
   entrar a /admin/meli/connect, y se guarda en memoria (dict + Lock,
@@ -36,7 +43,8 @@ from urllib.parse import urlencode
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -145,6 +153,15 @@ def _save_tokens(db: Session, token_data: dict) -> None:
     )
 
 
+class ConnectResponse(BaseModel):
+    authorization_url: str
+
+
+class StatusResponse(BaseModel):
+    connected: bool
+    updated_at: Optional[datetime] = None
+
+
 router = APIRouter(tags=["meli-oauth"])
 
 _SUCCESS_HTML = """<!doctype html>
@@ -160,12 +177,13 @@ _ERROR_HTML = """<!doctype html>
 </html>"""
 
 
-@router.get("/admin/meli/connect")
+@router.get("/admin/meli/connect", response_model=ConnectResponse)
 def connect_mercadolibre(current_user: User = Depends(require_admin)):
     """
     Inicia el flujo de authorization code de Mercado Libre: genera un
-    state de un solo uso y redirige al navegador del admin a la pantalla
-    de autorización de Mercado Libre.
+    state de un solo uso y devuelve la URL de autorización como JSON (no
+    un RedirectResponse — ver docstring del módulo). El front navega el
+    navegador completo a esa URL una vez que la recibe.
     """
     state = _generate_state()
     query = urlencode(
@@ -176,7 +194,16 @@ def connect_mercadolibre(current_user: User = Depends(require_admin)):
             "state": state,
         }
     )
-    return RedirectResponse(f"{MELI_AUTHORIZATION_URL}?{query}")
+    return ConnectResponse(authorization_url=f"{MELI_AUTHORIZATION_URL}?{query}")
+
+
+@router.get("/admin/meli/status", response_model=StatusResponse)
+def meli_status(current_user: User = Depends(require_admin), db: Session = Depends(get_db)):
+    """Si hay una conexión OAuth guardada (y desde cuándo), sin exponer el token en ningún momento."""
+    token_row = db.execute(select(MeliOAuthToken)).scalar_one_or_none()
+    if token_row is None:
+        return StatusResponse(connected=False)
+    return StatusResponse(connected=True, updated_at=token_row.updated_at)
 
 
 @router.get("/oauth/mercadolibre/callback", response_class=HTMLResponse)

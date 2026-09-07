@@ -17,6 +17,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   const passwordInput = document.getElementById("new-password");
   const createUserError = document.getElementById("create-user-error");
   const createUserButton = createUserForm.querySelector("button[type=submit]");
+  const meliConnectButton = document.getElementById("meli-connect-button");
+  const meliStatusMessage = document.getElementById("meli-status-message");
 
   const token = await Auth.requireSession();
   if (!token) {
@@ -30,6 +32,29 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await loadUsers();
   await loadProducts();
+  await loadMeliStatus();
+
+  meliConnectButton.addEventListener("click", async () => {
+    meliConnectButton.disabled = true;
+    try {
+      const response = await Auth.apiFetch("/admin/meli/connect");
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok || !data.authorization_url) {
+        window.alert(data.detail || "No se pudo iniciar la conexión con Mercado Libre.");
+        meliConnectButton.disabled = false;
+        return;
+      }
+
+      // Navegación real del navegador (no fetch): recién acá Mercado
+      // Libre puede mostrarle al admin su propia pantalla de
+      // autorización — el JSON anterior solo trae la URL a la que ir.
+      window.location.href = data.authorization_url;
+    } catch (error) {
+      window.alert("No se pudo conectar con el servidor. Intenta de nuevo.");
+      meliConnectButton.disabled = false;
+    }
+  });
 
   logoutButton.addEventListener("click", async () => {
     logoutButton.disabled = true;
@@ -211,5 +236,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     const products = await response.json();
     productsTableBody.replaceChildren();
     products.forEach((product) => productsTableBody.appendChild(createProductRow(product)));
+  }
+
+  async function loadMeliStatus() {
+    const response = await Auth.apiFetch("/admin/meli/status");
+    if (!response.ok) {
+      return;
+    }
+    const status = await response.json();
+    renderMeliStatus(status);
+  }
+
+  function renderMeliStatus(status) {
+    if (!status.connected) {
+      meliStatusMessage.hidden = true;
+      meliConnectButton.textContent = "Conectar con Mercado Libre";
+      return;
+    }
+
+    const fecha = status.updated_at ? new Date(status.updated_at).toLocaleString("es-CL") : null;
+    meliStatusMessage.textContent = fecha
+      ? `Conectado a Mercado Libre (última actualización: ${fecha}).`
+      : "Conectado a Mercado Libre.";
+    meliStatusMessage.hidden = false;
+    meliConnectButton.textContent = "Reconectar con Mercado Libre";
   }
 });
