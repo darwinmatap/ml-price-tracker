@@ -158,6 +158,11 @@ def _fetch_item_json(item_id: str, access_token: str) -> Optional[dict]:
     url = f"{ML_API_BASE_URL}/items/{item_id}"
     headers = {"Authorization": f"Bearer {access_token}"}
 
+    # TODO(diagnóstico temporal): remover este log una vez identificada la
+    # causa del fallo en producción reportado para item_id MLC44027325.
+    # No expone ningún secreto, solo el item_id que se está por consultar.
+    logger.info(f"Consultando Mercado Libre para item_id={item_id}")
+
     while True:
         try:
             response = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS)
