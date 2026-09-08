@@ -211,10 +211,19 @@ def _fetch_item_json(item_id: str, access_token: str) -> Optional[dict]:
 
         try:
             response.raise_for_status()
-        except requests.exceptions.HTTPError as exc:
+        except requests.exceptions.HTTPError:
+            # TODO(diagnóstico temporal): status+body en el mensaje de texto
+            # (no en extra=), para verlo en el log crudo de Render sin
+            # depender de un Formatter que los imprima — ver commit de
+            # app/logging_config.py. body truncado a 300 chars por si es
+            # HTML largo; se redacta cualquier aparición literal del
+            # access_token como defensa en profundidad (Mercado Libre no
+            # debería ecoarlo en un cuerpo de error, pero no es algo que
+            # controlemos nosotros).
+            body_preview = response.text[:300].replace(access_token, "<redacted>")
             logger.error(
-                "Respuesta HTTP inesperada consultando Mercado Libre",
-                extra={"item_id": item_id, "status_code": response.status_code, "error": str(exc)},
+                f"Respuesta HTTP inesperada consultando Mercado Libre: "
+                f"item_id={item_id}, status={response.status_code}, body={body_preview}"
             )
             return None
 
