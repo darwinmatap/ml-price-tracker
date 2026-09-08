@@ -12,11 +12,17 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.admin import router as admin_router
 from app.auth import limiter, router as auth_router
+from app.logging_config import configure_logging
 from app.meli_oauth import router as meli_oauth_router
 from app.products import router as products_router
 from app.scheduler import create_scheduler
 from app.security_headers import SecurityHeadersMiddleware
 from app.views import router as views_router
+
+# Antes que cualquier otra cosa: sin esto, el logger raíz no tiene
+# handler propio y cualquier logger.info(...) del resto de la app queda
+# silenciado en producción (ver app/logging_config.py).
+configure_logging()
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
